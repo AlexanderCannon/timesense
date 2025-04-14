@@ -1,42 +1,22 @@
 use std::path::Path;
-use tesseract::Tesseract;
+use tesseract::{Tesseract, TesseractError};
 
-pub struct ScreenshotAnalyzer {
-    tess: Tesseract,
-}
+pub struct ScreenshotAnalyzer;
 
 impl ScreenshotAnalyzer {
     pub fn new() -> Result<Self, String> {
-        let tess = Tesseract::new(None, Some("eng"))
+        // Just verify that Tesseract can be initialized
+        let _tess = Tesseract::new(None, Some("eng"))
             .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?;
         
-        Ok(ScreenshotAnalyzer { tess })
+        Ok(ScreenshotAnalyzer)
     }
 
-    pub fn analyze_screenshot(&mut self, path: &Path) -> String {
+    pub fn analyze_screenshot(&self, path: &Path) -> String {
         println!("Analyzing screenshot: {:?}", path);
         
-        // Set page segmentation mode
-        if let Err(e) = self.tess.set_variable("tessedit_pageseg_mode", "7") {
-            println!("Failed to set page segmentation mode: {}", e);
-            return "Unknown".to_string();
-        }
-
-        // Set character whitelist
-        if let Err(e) = self.tess.set_variable("tessedit_char_whitelist", 
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_ ") {
-            println!("Failed to set character whitelist: {}", e);
-            return "Unknown".to_string();
-        }
-
-        // Set image
-        if let Err(e) = self.tess.set_image(path.to_str().unwrap_or("")) {
-            println!("Failed to set image: {}", e);
-            return "Unknown".to_string();
-        }
-
-        // Get text
-        let text = match self.tess.get_text() {
+        // Initialize Tesseract and perform OCR using method chaining
+        let text = match self.perform_ocr(path) {
             Ok(text) => text,
             Err(e) => {
                 println!("Failed to perform OCR: {}", e);
@@ -77,5 +57,15 @@ impl ScreenshotAnalyzer {
             println!("OCR analysis complete. No valid window title detected.");
             "Unknown".to_string()
         }
+    }
+
+    fn perform_ocr(&self, path: &Path) -> Result<String, TesseractError> {
+        Ok(Tesseract::new(None, Some("eng"))?
+            .set_variable("tessedit_pageseg_mode", "7")?
+            .set_variable("tessedit_char_whitelist", 
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_ ")?
+            .set_image(path.to_str().unwrap_or(""))?
+            .recognize()?
+            .get_text()?)
     }
 } 

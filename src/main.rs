@@ -1,6 +1,5 @@
 use chrono::{DateTime, Duration, Local};
 use device_query::{DeviceQuery, DeviceState};
-use rand::Rng;
 use screenshots::Screen;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -9,10 +8,10 @@ use std::fs;
 use std::path::Path;
 use std::thread;
 use std::time;
-use tesseract::Tesseract;
-use std::rc::Rc;
-use std::cell::RefCell;
+
+mod report_generator;
 mod screenshot_analyzer;
+use report_generator::ReportGenerator;
 use screenshot_analyzer::ScreenshotAnalyzer;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -78,8 +77,8 @@ fn main() {
     fs::create_dir_all(&screenshots_dir).expect("Failed to create screenshots directory");
 
     // Initialize screenshot analyzer
-    let mut screenshot_analyzer = ScreenshotAnalyzer::new()
-        .expect("Failed to initialize screenshot analyzer");
+    let mut screenshot_analyzer =
+        ScreenshotAnalyzer::new().expect("Failed to initialize screenshot analyzer");
 
     let mut time_blocks: Vec<TimeBlock> = Vec::new();
     let mut current_block: Option<TimeBlock> = None;
@@ -119,7 +118,8 @@ fn main() {
                                     println!("Screenshot saved successfully");
 
                                     // Analyze the screenshot to determine application
-                                    let app_name = screenshot_analyzer.analyze_screenshot(&screenshot_path);
+                                    let app_name =
+                                        screenshot_analyzer.analyze_screenshot(&screenshot_path);
                                     println!("Detected application: {}", app_name);
 
                                     let activity_type = categorize_activity(&app_name, &config);
@@ -276,84 +276,11 @@ fn generate_daily_summary(time_blocks: &[TimeBlock], config: &Config) -> DailySu
     let json = serde_json::to_string_pretty(&summary).unwrap();
     fs::write(filename, json).expect("Failed to write daily summary");
 
-    // Generate report
-    generate_report(&summary);
+    // Generate report using the ReportGenerator
+    let report_generator = ReportGenerator::new(config.data_directory.clone());
+    report_generator.generate_report(&summary);
 
     summary
-}
-
-fn generate_report(summary: &DailySummary) {
-    // Create a user-friendly HTML report
-    let productive_hours = summary.productive_time.num_minutes() as f64 / 60.0;
-    let distracted_hours = summary.distracted_time.num_minutes() as f64 / 60.0;
-    let idle_hours = summary.idle_time.num_minutes() as f64 / 60.0;
-
-    let html = format!(
-        r#"<!DOCTYPE html>
-<html>
-<head>
-    <title>TimeSense Daily Report - {}</title>
-    <style>
-        body {{ font-family: Arial, sans-serif; margin: 20px; }}
-        .summary {{ margin-bottom: 20px; }}
-        .chart {{ width: 100%; background-color: #f0f0f0; height: 30px; margin-bottom: 15px; }}
-        .productive {{ background-color: #4CAF50; height: 100%; float: left; }}
-        .distracted {{ background-color: #F44336; height: 100%; float: left; }}
-        .idle {{ background-color: #9E9E9E; height: 100%; float: left; }}
-        table {{ border-collapse: collapse; width: 100%; }}
-        th, td {{ text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }}
-    </style>
-</head>
-<body>
-    <h1>TimeSense Daily Report</h1>
-    <h2>Date: {}</h2>
-    
-    <div class="summary">
-        <h3>Time Distribution</h3>
-        <div class="chart">
-            <div class="productive" style="width: {}%"></div>
-            <div class="distracted" style="width: {}%"></div>
-            <div class="idle" style="width: {}%"></div>
-        </div>
-        <p>Productive: {:.2} hours</p>
-        <p>Distracted: {:.2} hours</p>
-        <p>Idle: {:.2} hours</p>
-    </div>
-    
-    <h3>Application Breakdown</h3>
-    <table>
-        <tr>
-            <th>Application</th>
-            <th>Hours</th>
-        </tr>
-        {}
-    </table>
-</body>
-</html>"#,
-        summary.date,
-        summary.date,
-        productive_hours / (productive_hours + distracted_hours + idle_hours) * 100.0,
-        distracted_hours / (productive_hours + distracted_hours + idle_hours) * 100.0,
-        idle_hours / (productive_hours + distracted_hours + idle_hours) * 100.0,
-        productive_hours,
-        distracted_hours,
-        idle_hours,
-        summary
-            .application_breakdown
-            .iter()
-            .map(|(app, duration)| {
-                format!(
-                    "<tr><td>{}</td><td>{:.2}</td></tr>",
-                    app,
-                    duration.num_minutes() as f64 / 60.0
-                )
-            })
-            .collect::<Vec<String>>()
-            .join("")
-    );
-
-    let filename = format!("{}/report_{}.html", "timesense_data", summary.date);
-    fs::write(filename, html).expect("Failed to write HTML report");
 }
 
 fn load_config() -> Option<Config> {
