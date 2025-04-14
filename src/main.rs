@@ -1,5 +1,5 @@
 use chrono::{DateTime, Duration, Local};
-use device_query::{DeviceQuery, DeviceState, Keycode};
+use device_query::{DeviceQuery, DeviceState};
 use screenshots::Screen;
 use std::collections::HashMap;
 use std::fs;
@@ -9,6 +9,7 @@ use std::time;
 use tesseract::Tesseract;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use rand::Rng;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TimeBlock {
@@ -127,7 +128,7 @@ fn main() {
         
         // Generate daily summary if it's a new day
         if !time_blocks.is_empty() && 
-           time_blocks.last().unwrap().end_time.date() != now.date() {
+           time_blocks.last().unwrap().end_time.date_naive() != now.date_naive() {
             generate_daily_summary(&time_blocks, &config);
             time_blocks.clear();
         }
@@ -137,9 +138,9 @@ fn main() {
     }
 }
 
-fn analyze_screenshot(path: &Path) -> String {
+fn analyze_screenshot(_path: &Path) -> String {
     // Initialize Tesseract OCR
-    let tess = Tesseract::new(None, Some("eng")).unwrap();
+    let _tess = Tesseract::new(None, Some("eng")).unwrap();
     
     // In a real implementation, we'd use window manager APIs,
     // but for simplicity we'll mock recognizing apps from window titles
@@ -191,7 +192,7 @@ fn generate_daily_summary(time_blocks: &[TimeBlock], config: &Config) -> DailySu
         }
     }
     
-    let date = time_blocks.first().unwrap().start_time.date().format("%Y-%m-%d").to_string();
+    let date = time_blocks.first().unwrap().start_time.date_naive().format("%Y-%m-%d").to_string();
     
     let summary = DailySummary {
         date,
