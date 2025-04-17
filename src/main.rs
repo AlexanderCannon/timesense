@@ -7,18 +7,19 @@ use serde_json;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time;
 use webbrowser;
 
+mod app_detector;
 mod report_generator;
 mod screenshot_analyzer;
-mod macos_app_detector;
+
+use app_detector::{AppDetector, PlatformAppDetector};
 use report_generator::ReportGenerator;
 use screenshot_analyzer::ScreenshotAnalyzer;
-use macos_app_detector::MacOSAppDetector;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TimeBlock {
@@ -95,9 +96,9 @@ fn main() {
     // Initialize screenshot analyzer (for fallback)
     let _screenshot_analyzer =
         ScreenshotAnalyzer::new().expect("Failed to initialize screenshot analyzer");
-    
-    // Initialize macOS app detector
-    let app_detector = MacOSAppDetector::new();
+
+    // Initialize the app detector
+    let app_detector = PlatformAppDetector::new();
 
     let mut time_blocks: Vec<TimeBlock> = Vec::new();
     let mut current_block: Option<TimeBlock> = None;
@@ -120,11 +121,11 @@ fn main() {
         let is_idle = now.signed_duration_since(last_input_time).num_seconds()
             > config.idle_threshold_seconds as i64;
 
-        // Get the active application using macOS APIs
-        let app_name = app_detector.get_active_application();
-        println!("Active application: {}", app_name);
-        
-        let activity_type = categorize_activity(&app_name, &config);
+        // Get the active application
+        let active_app = app_detector.get_active_application();
+        println!("Active application: {}", active_app);
+
+        let activity_type = categorize_activity(&active_app, &config);
         println!("Activity type: {}", activity_type);
 
         // Take a screenshot for record-keeping
@@ -160,44 +161,40 @@ fn main() {
         // Update time blocks
         match &current_block {
             Some(block) => {
-                if block.application != app_name || block.idle != is_idle {
+                if block.application != active_app || block.idle != is_idle {
                     // Finish current block
                     let mut finished_block = current_block.take().unwrap();
                     finished_block.end_time = now;
                     time_blocks.push(finished_block);
 
                     // Start new block
-                    let app_name_clone = app_name.clone();
-                    let activity_type_clone = activity_type.clone();
                     current_block = Some(TimeBlock {
                         start_time: now,
                         end_time: now, // Will be updated later
-                        application: app_name,
-                        activity_type,
+                        application: active_app.clone(),
+                        activity_type: activity_type.clone(),
                         idle: is_idle,
                     });
 
                     println!(
                         "New time block started: {} ({})",
-                        app_name_clone, activity_type_clone
+                        active_app, activity_type
                     );
                 }
             }
             None => {
                 // Start first block
-                let app_name_clone = app_name.clone();
-                let activity_type_clone = activity_type.clone();
                 current_block = Some(TimeBlock {
                     start_time: now,
                     end_time: now, // Will be updated later
-                    application: app_name,
-                    activity_type,
+                    application: active_app.clone(),
+                    activity_type: activity_type.clone(),
                     idle: is_idle,
                 });
 
                 println!(
                     "First time block started: {} ({})",
-                    app_name_clone, activity_type_clone
+                    active_app, activity_type
                 );
             }
         }
