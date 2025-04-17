@@ -57,7 +57,7 @@ fn main() {
     let r = running.clone();
     ctrlc::set_handler(move || {
         println!("\nReceived Ctrl+C.");
-        println!("Generating final report...");
+        println!("Generating report...");
         r.store(false, Ordering::SeqCst);
     })
     .expect("Error setting Ctrl+C handler");
@@ -71,11 +71,24 @@ fn main() {
                 "code".to_string(),
                 "terminal".to_string(),
                 "notion".to_string(),
+                "cursor".to_string(),
+                "vscode".to_string(),
             ],
             distraction_apps: vec![
                 "twitter".to_string(),
                 "youtube".to_string(),
                 "reddit".to_string(),
+                "slack".to_string(),
+                "discord".to_string(),
+                "spotify".to_string(),
+                "steam".to_string(),
+                "twitch".to_string(),
+                "telegram".to_string(),
+                "whatsapp".to_string(),
+                "zoom".to_string(),
+                "skype".to_string(),
+                "microsoft teams".to_string(),
+                "google meet".to_string(),
             ],
             data_directory: "timesense_data".to_string(),
         };
@@ -176,10 +189,7 @@ fn main() {
                         idle: is_idle,
                     });
 
-                    println!(
-                        "New time block started: {} ({})",
-                        active_app, activity_type
-                    );
+                    println!("New time block started: {} ({})", active_app, activity_type);
                 }
             }
             None => {
@@ -222,9 +232,9 @@ fn main() {
         time_blocks.push(block);
     }
 
-    // Generate a final report for the current day
+    // Generate a report for the current day
     if !time_blocks.is_empty() {
-        println!("Generating final report for today's data...");
+        println!("Generating report for today's data...");
         let summary = generate_daily_summary(&time_blocks, &config);
 
         // Get the absolute path to the report file
