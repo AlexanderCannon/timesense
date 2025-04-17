@@ -13,36 +13,36 @@ impl ReportGenerator {
 
     pub fn generate_report(&self, summary: &super::DailySummary) {
         // Create a user-friendly HTML report
-        let productive_hours = summary.productive_time.num_minutes() as f64 / 60.0;
-        let distracted_hours = summary.distracted_time.num_minutes() as f64 / 60.0;
-        let idle_hours = summary.idle_time.num_minutes() as f64 / 60.0;
+        let productive_minutes = summary.productive_time.num_minutes() as f64;
+        let distracted_minutes = summary.distracted_time.num_minutes() as f64;
+        let idle_minutes = summary.idle_time.num_minutes() as f64;
 
-        let total_hours = productive_hours + distracted_hours + idle_hours;
-        let productive_percentage = if total_hours > 0.0 {
-            (productive_hours / total_hours) * 100.0
+        let total_minutes = productive_minutes + distracted_minutes + idle_minutes;
+        let productive_percentage = if total_minutes > 0.0 {
+            (productive_minutes / total_minutes) * 100.0
         } else {
             0.0
         };
-        let distracted_percentage = if total_hours > 0.0 {
-            (distracted_hours / total_hours) * 100.0
+        let distracted_percentage = if total_minutes > 0.0 {
+            (distracted_minutes / total_minutes) * 100.0
         } else {
             0.0
         };
-        let idle_percentage = if total_hours > 0.0 {
-            (idle_hours / total_hours) * 100.0
-        } else {
-            0.0
-        };
-
-        // Calculate productivity score (0-100)
-        let productivity_score = if total_hours > 0.0 {
-            (productive_hours / total_hours) * 100.0
+        let idle_percentage = if total_minutes > 0.0 {
+            (idle_minutes / total_minutes) * 100.0
         } else {
             0.0
         };
 
-        // Get productivity rating
-        let productivity_rating = self.get_productivity_rating(productivity_score);
+        // Calculate time distribution score (0-100)
+        let time_distribution_score = if total_minutes > 0.0 {
+            (productive_minutes / total_minutes) * 100.0
+        } else {
+            0.0
+        };
+
+        // Get time distribution rating
+        let time_distribution_rating = self.get_time_distribution_rating(time_distribution_score);
 
         let html = format!(
             r#"<!DOCTYPE html>
@@ -109,7 +109,7 @@ impl ReportGenerator {
         tr:hover {{
             background-color: #f5f5f5;
         }}
-        .productivity-score {{
+        .time-distribution-score {{
             font-size: 24px;
             font-weight: bold;
             text-align: center;
@@ -117,15 +117,15 @@ impl ReportGenerator {
             padding: 10px;
             border-radius: 5px;
         }}
-        .high-productivity {{
+        .high-distribution {{
             background-color: #dff0d8;
             color: #3c763d;
         }}
-        .medium-productivity {{
+        .medium-distribution {{
             background-color: #fcf8e3;
             color: #8a6d3b;
         }}
-        .low-productivity {{
+        .low-distribution {{
             background-color: #f2dede;
             color: #a94442;
         }}
@@ -170,23 +170,23 @@ impl ReportGenerator {
         </header>
         
         <div class="content">
-            <div class="productivity-score {}">
-                Productivity Score: {:.1}% - {}
+            <div class="time-distribution-score {}">
+                Time Distribution Score: {:.1}% - {}
             </div>
             
             <div class="section">
                 <h3 class="section-title">Time Distribution</h3>
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-value productive-value">{:.2} hours</div>
-                        <div class="stat-label">Productive Time</div>
+                        <div class="stat-value productive-value">{:.0} minutes</div>
+                        <div class="stat-label">Focused Time</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value distracted-value">{:.2} hours</div>
+                        <div class="stat-value distracted-value">{:.0} minutes</div>
                         <div class="stat-label">Distracted Time</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value idle-value">{:.2} hours</div>
+                        <div class="stat-value idle-value">{:.0} minutes</div>
                         <div class="stat-label">Idle Time</div>
                     </div>
                 </div>
@@ -199,11 +199,11 @@ impl ReportGenerator {
             </div>
             
             <div class="section">
-                <h3 class="section-title">Application Breakdown</h3>
+                <h3 class="section-title">Application Usage</h3>
                 <table>
                     <tr>
                         <th>Application</th>
-                        <th>Hours</th>
+                        <th>Minutes</th>
                         <th>Percentage</th>
                     </tr>
                     {}
@@ -211,11 +211,11 @@ impl ReportGenerator {
             </div>
             
             <div class="section">
-                <h3 class="section-title">Activity Breakdown</h3>
+                <h3 class="section-title">Activity Distribution</h3>
                 <table>
                     <tr>
                         <th>Activity Type</th>
-                        <th>Hours</th>
+                        <th>Minutes</th>
                         <th>Percentage</th>
                     </tr>
                     {}
@@ -223,7 +223,7 @@ impl ReportGenerator {
             </div>
             
             <div class="section">
-                <h3 class="section-title">Productivity Insights</h3>
+                <h3 class="section-title">Time Distribution Observations</h3>
                 <p>{}</p>
             </div>
         </div>
@@ -232,25 +232,25 @@ impl ReportGenerator {
 </html>"#,
             summary.date,
             summary.date,
-            self.get_productivity_class(productivity_score),
-            productivity_score,
-            productivity_rating,
-            productive_hours,
-            distracted_hours,
-            idle_hours,
+            self.get_time_distribution_class(time_distribution_score),
+            time_distribution_score,
+            time_distribution_rating,
+            productive_minutes,
+            distracted_minutes,
+            idle_minutes,
             productive_percentage,
             distracted_percentage,
             idle_percentage,
-            self.generate_application_table(&summary.application_breakdown, total_hours),
-            self.generate_activity_table(&summary.activity_breakdown, total_hours),
-            self.generate_productivity_insights(summary)
+            self.generate_application_table(&summary.application_breakdown, total_minutes),
+            self.generate_activity_table(&summary.activity_breakdown, total_minutes),
+            self.generate_time_distribution_observations(summary)
         );
 
         let filename = format!("{}/report_{}.html", self.data_directory, summary.date);
         fs::write(filename, html).expect("Failed to write HTML report");
     }
 
-    fn generate_application_table(&self, app_breakdown: &HashMap<String, Duration>, total_hours: f64) -> String {
+    fn generate_application_table(&self, app_breakdown: &HashMap<String, Duration>, total_minutes: f64) -> String {
         // Sort applications by duration (descending)
         let mut sorted_apps: Vec<(&String, &Duration)> = app_breakdown.iter().collect();
         sorted_apps.sort_by(|a, b| b.1.cmp(a.1));
@@ -258,16 +258,16 @@ impl ReportGenerator {
         sorted_apps
             .iter()
             .map(|(app, duration)| {
-                let hours = duration.num_minutes() as f64 / 60.0;
-                let percentage = if total_hours > 0.0 {
-                    (hours / total_hours) * 100.0
+                let minutes = duration.num_minutes() as f64;
+                let percentage = if total_minutes > 0.0 {
+                    (minutes / total_minutes) * 100.0
                 } else {
                     0.0
                 };
                 format!(
-                    "<tr><td>{}</td><td>{:.2}</td><td>{:.1}%</td></tr>",
+                    "<tr><td>{}</td><td>{:.0}</td><td>{:.1}%</td></tr>",
                     app,
-                    hours,
+                    minutes,
                     percentage
                 )
             })
@@ -275,7 +275,7 @@ impl ReportGenerator {
             .join("")
     }
     
-    fn generate_activity_table(&self, activity_breakdown: &HashMap<String, Duration>, total_hours: f64) -> String {
+    fn generate_activity_table(&self, activity_breakdown: &HashMap<String, Duration>, total_minutes: f64) -> String {
         // Sort activities by duration (descending)
         let mut sorted_activities: Vec<(&String, &Duration)> = activity_breakdown.iter().collect();
         sorted_activities.sort_by(|a, b| b.1.cmp(a.1));
@@ -283,16 +283,16 @@ impl ReportGenerator {
         sorted_activities
             .iter()
             .map(|(activity, duration)| {
-                let hours = duration.num_minutes() as f64 / 60.0;
-                let percentage = if total_hours > 0.0 {
-                    (hours / total_hours) * 100.0
+                let minutes = duration.num_minutes() as f64;
+                let percentage = if total_minutes > 0.0 {
+                    (minutes / total_minutes) * 100.0
                 } else {
                     0.0
                 };
                 format!(
-                    "<tr><td>{}</td><td>{:.2}</td><td>{:.1}%</td></tr>",
+                    "<tr><td>{}</td><td>{:.0}</td><td>{:.1}%</td></tr>",
                     activity,
-                    hours,
+                    minutes,
                     percentage
                 )
             })
@@ -300,86 +300,86 @@ impl ReportGenerator {
             .join("")
     }
     
-    fn get_productivity_rating(&self, score: f64) -> String {
+    fn get_time_distribution_rating(&self, score: f64) -> String {
         if score >= 80.0 {
-            "Excellent".to_string()
+            "High Focus".to_string()
         } else if score >= 60.0 {
-            "Good".to_string()
+            "Moderate Focus".to_string()
         } else if score >= 40.0 {
-            "Fair".to_string()
+            "Balanced".to_string()
         } else {
-            "Needs Improvement".to_string()
+            "Distracted".to_string()
         }
     }
     
-    fn get_productivity_class(&self, score: f64) -> String {
+    fn get_time_distribution_class(&self, score: f64) -> String {
         if score >= 60.0 {
-            "high-productivity".to_string()
+            "high-distribution".to_string()
         } else if score >= 40.0 {
-            "medium-productivity".to_string()
+            "medium-distribution".to_string()
         } else {
-            "low-productivity".to_string()
+            "low-distribution".to_string()
         }
     }
     
-    fn generate_productivity_insights(&self, summary: &super::DailySummary) -> String {
-        let productive_hours = summary.productive_time.num_minutes() as f64 / 60.0;
-        let distracted_hours = summary.distracted_time.num_minutes() as f64 / 60.0;
-        let idle_hours = summary.idle_time.num_minutes() as f64 / 60.0;
-        let total_hours = productive_hours + distracted_hours + idle_hours;
+    fn generate_time_distribution_observations(&self, summary: &super::DailySummary) -> String {
+        let productive_minutes = summary.productive_time.num_minutes() as f64;
+        let distracted_minutes = summary.distracted_time.num_minutes() as f64;
+        let idle_minutes = summary.idle_time.num_minutes() as f64;
+        let total_minutes = productive_minutes + distracted_minutes + idle_minutes;
         
-        let mut insights = String::new();
+        let mut observations = String::new();
         
-        // Productivity insights
-        if productive_hours > 0.0 {
-            insights.push_str(&format!(
-                "You spent {:.1} hours on productive activities, which is {:.1}% of your tracked time. ",
-                productive_hours,
-                (productive_hours / total_hours) * 100.0
+        // Time distribution observations
+        if productive_minutes > 0.0 {
+            observations.push_str(&format!(
+                "You spent {:.0} minutes on focused activities, which is {:.1}% of your tracked time. ",
+                productive_minutes,
+                (productive_minutes / total_minutes) * 100.0
             ));
         }
         
-        // Distraction insights
-        if distracted_hours > 0.0 {
-            insights.push_str(&format!(
-                "You were distracted for {:.1} hours ({:.1}% of your time). ",
-                distracted_hours,
-                (distracted_hours / total_hours) * 100.0
+        // Distraction observations
+        if distracted_minutes > 0.0 {
+            observations.push_str(&format!(
+                "You spent {:.0} minutes on distracting activities ({:.1}% of your time). ",
+                distracted_minutes,
+                (distracted_minutes / total_minutes) * 100.0
             ));
         }
         
-        // Idle insights
-        if idle_hours > 0.0 {
-            insights.push_str(&format!(
-                "You were idle for {:.1} hours ({:.1}% of your time). ",
-                idle_hours,
-                (idle_hours / total_hours) * 100.0
+        // Idle observations
+        if idle_minutes > 0.0 {
+            observations.push_str(&format!(
+                "You were idle for {:.0} minutes ({:.1}% of your time). ",
+                idle_minutes,
+                (idle_minutes / total_minutes) * 100.0
             ));
         }
         
-        // Application insights
+        // Application observations
         if let Some((app, duration)) = summary.application_breakdown.iter()
             .max_by(|a, b| a.1.cmp(b.1)) {
-            let app_hours = duration.num_minutes() as f64 / 60.0;
-            insights.push_str(&format!(
-                "The application you used most was '{}' for {:.1} hours. ",
-                app, app_hours
+            let app_minutes = duration.num_minutes() as f64;
+            observations.push_str(&format!(
+                "The application you used most was '{}' for {:.0} minutes. ",
+                app, app_minutes
             ));
         }
         
-        // Productivity rating
-        let productivity_score = if total_hours > 0.0 {
-            (productive_hours / total_hours) * 100.0
+        // Time distribution rating
+        let time_distribution_score = if total_minutes > 0.0 {
+            (productive_minutes / total_minutes) * 100.0
         } else {
             0.0
         };
         
-        let rating = self.get_productivity_rating(productivity_score);
-        insights.push_str(&format!(
-            "Your overall productivity rating for today is '{}'.",
+        let rating = self.get_time_distribution_rating(time_distribution_score);
+        observations.push_str(&format!(
+            "Your time distribution pattern for this session is categorized as '{}'.",
             rating
         ));
         
-        insights
+        observations
     }
 } 
