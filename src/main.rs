@@ -15,8 +15,10 @@ use webbrowser;
 
 mod report_generator;
 mod screenshot_analyzer;
+mod macos_app_detector;
 use report_generator::ReportGenerator;
 use screenshot_analyzer::ScreenshotAnalyzer;
+use macos_app_detector::MacOSAppDetector;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TimeBlock {
@@ -90,9 +92,12 @@ fn main() {
     let screenshots_dir = Path::new(&config.data_directory).join("screenshots");
     fs::create_dir_all(&screenshots_dir).expect("Failed to create screenshots directory");
 
-    // Initialize screenshot analyzer
-    let mut screenshot_analyzer =
+    // Initialize screenshot analyzer (for fallback)
+    let _screenshot_analyzer =
         ScreenshotAnalyzer::new().expect("Failed to initialize screenshot analyzer");
+    
+    // Initialize macOS app detector
+    let app_detector = MacOSAppDetector::new();
 
     let mut time_blocks: Vec<TimeBlock> = Vec::new();
     let mut current_block: Option<TimeBlock> = None;
@@ -115,7 +120,14 @@ fn main() {
         let is_idle = now.signed_duration_since(last_input_time).num_seconds()
             > config.idle_threshold_seconds as i64;
 
-        // Take a screenshot of the primary display
+        // Get the active application using macOS APIs
+        let app_name = app_detector.get_active_application();
+        println!("Active application: {}", app_name);
+        
+        let activity_type = categorize_activity(&app_name, &config);
+        println!("Activity type: {}", activity_type);
+
+        // Take a screenshot for record-keeping
         match Screen::all() {
             Ok(screens) => {
                 if let Some(screen) = screens.first() {
@@ -132,64 +144,6 @@ fn main() {
                             match image.save(&screenshot_path) {
                                 Ok(_) => {
                                     println!("Screenshot saved successfully");
-
-                                    // Analyze the screenshot to determine application
-                                    let app_name =
-                                        screenshot_analyzer.analyze_screenshot(&screenshot_path);
-                                    println!("Detected application: {}", app_name);
-
-                                    let activity_type = categorize_activity(&app_name, &config);
-                                    println!("Activity type: {}", activity_type);
-
-                                    // Update time blocks
-                                    match &current_block {
-                                        Some(block) => {
-                                            if block.application != app_name
-                                                || block.idle != is_idle
-                                            {
-                                                // Finish current block
-                                                let mut finished_block =
-                                                    current_block.take().unwrap();
-                                                finished_block.end_time = now;
-                                                time_blocks.push(finished_block);
-
-                                                // Start new block
-                                                let app_name_clone = app_name.clone();
-                                                let activity_type_clone = activity_type.clone();
-                                                current_block = Some(TimeBlock {
-                                                    start_time: now,
-                                                    end_time: now, // Will be updated later
-                                                    application: app_name,
-                                                    activity_type,
-                                                    idle: is_idle,
-                                                });
-
-                                                println!(
-                                                    "New time block started: {} ({})",
-                                                    app_name_clone, activity_type_clone
-                                                );
-                                            }
-                                        }
-                                        None => {
-                                            // Start first block
-                                            let app_name_clone = app_name.clone();
-                                            let activity_type_clone = activity_type.clone();
-                                            current_block = Some(TimeBlock {
-                                                start_time: now,
-                                                end_time: now, // Will be updated later
-                                                application: app_name,
-                                                activity_type,
-                                                idle: is_idle,
-                                            });
-
-                                            println!(
-                                                "First time block started: {} ({})",
-                                                app_name_clone, activity_type_clone
-                                            );
-                                        }
-                                    }
-
-                                    // We're keeping the screenshots for audit purposes, so we don't delete them
                                 }
                                 Err(e) => println!("Failed to save screenshot: {}", e),
                             }
@@ -201,6 +155,51 @@ fn main() {
                 }
             }
             Err(e) => println!("Failed to get screens: {}", e),
+        }
+
+        // Update time blocks
+        match &current_block {
+            Some(block) => {
+                if block.application != app_name || block.idle != is_idle {
+                    // Finish current block
+                    let mut finished_block = current_block.take().unwrap();
+                    finished_block.end_time = now;
+                    time_blocks.push(finished_block);
+
+                    // Start new block
+                    let app_name_clone = app_name.clone();
+                    let activity_type_clone = activity_type.clone();
+                    current_block = Some(TimeBlock {
+                        start_time: now,
+                        end_time: now, // Will be updated later
+                        application: app_name,
+                        activity_type,
+                        idle: is_idle,
+                    });
+
+                    println!(
+                        "New time block started: {} ({})",
+                        app_name_clone, activity_type_clone
+                    );
+                }
+            }
+            None => {
+                // Start first block
+                let app_name_clone = app_name.clone();
+                let activity_type_clone = activity_type.clone();
+                current_block = Some(TimeBlock {
+                    start_time: now,
+                    end_time: now, // Will be updated later
+                    application: app_name,
+                    activity_type,
+                    idle: is_idle,
+                });
+
+                println!(
+                    "First time block started: {} ({})",
+                    app_name_clone, activity_type_clone
+                );
+            }
         }
 
         // Generate daily summary if it's a new day
