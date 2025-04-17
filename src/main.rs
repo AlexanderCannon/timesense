@@ -16,6 +16,7 @@ use webbrowser;
 mod app_detector;
 mod report_generator;
 mod screenshot_analyzer;
+mod fuzzy_match;
 
 use app_detector::{AppDetector, PlatformAppDetector};
 use report_generator::ReportGenerator;

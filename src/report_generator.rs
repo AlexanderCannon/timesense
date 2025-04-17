@@ -1,6 +1,7 @@
 use std::fs;
 use chrono::Duration;
 use std::collections::HashMap;
+use crate::fuzzy_match::group_similar_apps;
 
 pub struct ReportGenerator {
     data_directory: String,
@@ -250,29 +251,40 @@ impl ReportGenerator {
         fs::write(filename, html).expect("Failed to write HTML report");
     }
 
-    fn generate_application_table(&self, app_breakdown: &HashMap<String, Duration>, total_minutes: f64) -> String {
-        // Sort applications by duration (descending)
-        let mut sorted_apps: Vec<(&String, &Duration)> = app_breakdown.iter().collect();
-        sorted_apps.sort_by(|a, b| b.1.cmp(a.1));
+    pub fn generate_application_table(&self, app_breakdown: &HashMap<String, Duration>, total_minutes: f64) -> String {
+        // Group similar app names together
+        let grouped_apps = group_similar_apps(app_breakdown);
         
-        sorted_apps
-            .iter()
-            .map(|(app, duration)| {
-                let minutes = duration.num_minutes() as f64;
-                let percentage = if total_minutes > 0.0 {
-                    (minutes / total_minutes) * 100.0
-                } else {
-                    0.0
-                };
-                format!(
-                    "<tr><td>{}</td><td>{:.0}</td><td>{:.1}%</td></tr>",
-                    app,
-                    minutes,
-                    percentage
-                )
-            })
-            .collect::<Vec<String>>()
-            .join("")
+        // Convert to vec for sorting
+        let mut app_vec: Vec<(&String, &Duration)> = grouped_apps.iter().collect();
+        app_vec.sort_by(|a, b| b.1.cmp(a.1));
+
+        let mut table = String::from(r#"<table class="app-table">
+            <tr>
+                <th>Application</th>
+                <th>Time Spent</th>
+            </tr>"#);
+
+        for (app_name, duration) in app_vec {
+            let hours = duration.num_hours();
+            let minutes = duration.num_minutes() % 60;
+            let time_str = if hours > 0 {
+                format!("{}h {}m", hours, minutes)
+            } else {
+                format!("{}m", minutes)
+            };
+
+            table.push_str(&format!(
+                r#"<tr>
+                    <td>{}</td>
+                    <td>{}</td>
+                </tr>"#,
+                app_name, time_str
+            ));
+        }
+
+        table.push_str("</table>");
+        table
     }
     
     fn generate_activity_table(&self, activity_breakdown: &HashMap<String, Duration>, total_minutes: f64) -> String {
