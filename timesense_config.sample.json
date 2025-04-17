@@ -1,0 +1,28 @@
+{
+  "screenshot_interval_seconds": 60,
+  "idle_threshold_seconds": 180,
+  "productive_apps": [
+    "code",
+    "terminal",
+    "notion",
+    "cursor",
+    "vscode"
+  ],
+  "distraction_apps": [
+    "twitter",
+    "youtube",
+    "reddit",
+    "Slack",
+    "Discord",
+    "Spotify",
+    "Steam",
+    "Twitch",
+    "Telegram",
+    "WhatsApp",
+    "Zoom",
+    "Skype",
+    "Microsoft Teams",
+    "Google Meet"
+  ],
+  "data_directory": "timesense_data"
+}
