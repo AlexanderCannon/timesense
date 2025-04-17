@@ -1,4 +1,5 @@
 use chrono::{DateTime, Duration, Local};
+use ctrlc;
 use device_query::{DeviceQuery, DeviceState};
 use screenshots::Screen;
 use serde::{Deserialize, Serialize};
@@ -6,8 +7,11 @@ use serde_json;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time;
+use webbrowser;
 
 mod report_generator;
 mod screenshot_analyzer;
@@ -44,6 +48,16 @@ struct Config {
 
 fn main() {
     println!("Starting TimeSense - Automated Time Awareness Tool");
+
+    // Set up signal handler for graceful shutdown
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        println!("\nReceived Ctrl+C.");
+        println!("Generating final report...");
+        r.store(false, Ordering::SeqCst);
+    })
+    .expect("Error setting Ctrl+C handler");
 
     // Load config or create default
     let config = load_config().unwrap_or_else(|| {
@@ -85,7 +99,9 @@ fn main() {
     let device_state = DeviceState::new();
     let mut last_input_time = Local::now();
 
-    loop {
+    println!("TimeSense is running. Press Ctrl+C to stop and generate a report.");
+
+    while running.load(Ordering::SeqCst) {
         let now = Local::now();
 
         // Check for user activity
@@ -200,6 +216,55 @@ fn main() {
             config.screenshot_interval_seconds,
         ));
     }
+
+    // Graceful shutdown
+    println!("Performing graceful shutdown...");
+
+    // Finalize the current time block if it exists
+    if let Some(mut block) = current_block.take() {
+        block.end_time = Local::now();
+        time_blocks.push(block);
+    }
+
+    // Generate a final report for the current day
+    if !time_blocks.is_empty() {
+        println!("Generating final report for today's data...");
+        let summary = generate_daily_summary(&time_blocks, &config);
+
+        // Get the absolute path to the report file
+        let report_path = Path::new(&config.data_directory)
+            .join(format!("report_{}.html", summary.date))
+            .canonicalize()
+            .unwrap_or_else(|_| {
+                Path::new(&config.data_directory).join(format!("report_{}.html", summary.date))
+            });
+
+        // Convert to file URL format
+        let file_url = format!("file://{}", report_path.display());
+
+        println!("\nReport generated successfully!");
+        println!("To view your report, open this link in your browser:");
+        println!("{}", file_url);
+        println!("\nOr navigate to this file location:");
+        println!("{}", report_path.display());
+
+        // Ask if the user wants to open the report now
+        println!("\nWould you like to open the report now? (y/n)");
+        let mut input = String::new();
+        std::io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read input");
+
+        if input.trim().to_lowercase() == "y" || input.trim().to_lowercase() == "yes" {
+            println!("Opening report in your default browser...");
+            if let Err(e) = webbrowser::open(&file_url) {
+                println!("Failed to open browser: {}", e);
+                println!("Please open the report manually using the link or file path above.");
+            }
+        }
+    }
+
+    println!("TimeSense has been shut down gracefully.");
 }
 
 fn categorize_activity(app_name: &str, config: &Config) -> String {
