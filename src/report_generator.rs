@@ -19,27 +19,28 @@ impl ReportGenerator {
         let idle_minutes = summary.idle_time.num_minutes() as f64;
 
         let total_minutes = productive_minutes + distracted_minutes + idle_minutes;
-        let productive_percentage = if total_minutes > 0.0 {
-            (productive_minutes / total_minutes) * 100.0
+        
+        // Calculate percentages with proper handling of zero total time
+        let (productive_percentage, distracted_percentage, idle_percentage) = if total_minutes > 0.0 {
+            (
+                (productive_minutes / total_minutes) * 100.0,
+                (distracted_minutes / total_minutes) * 100.0,
+                (idle_minutes / total_minutes) * 100.0
+            )
         } else {
-            0.0
-        };
-        let distracted_percentage = if total_minutes > 0.0 {
-            (distracted_minutes / total_minutes) * 100.0
-        } else {
-            0.0
-        };
-        let idle_percentage = if total_minutes > 0.0 {
-            (idle_minutes / total_minutes) * 100.0
-        } else {
-            0.0
+            (0.0, 0.0, 0.0)
         };
 
-        // Calculate time distribution score (0-100)
+        // Calculate time distribution score (0-100) based on productive vs distracted time
         let time_distribution_score = if total_minutes > 0.0 {
-            (productive_minutes / total_minutes) * 100.0
+            let active_time = productive_minutes + distracted_minutes;
+            if active_time > 0.0 {
+                (productive_minutes / active_time) * 100.0
+            } else {
+                100.0 // If no active time, assume focused
+            }
         } else {
-            0.0
+            100.0 // If no time tracked, assume focused
         };
 
         // Get time distribution rating
@@ -201,7 +202,7 @@ impl ReportGenerator {
             
             <div class="section">
                 <h3 class="section-title">Application Usage</h3>
-                <table>
+                <table class="app-table">
                     <tr>
                         <th>Application</th>
                         <th>Minutes</th>
@@ -256,37 +257,27 @@ impl ReportGenerator {
         let grouped_apps = group_similar_apps(app_breakdown);
         
         // Convert to vec for sorting
-        let mut app_vec: Vec<(&String, &TimeDelta)> = grouped_apps.iter()
-            .map(|(name, (duration, _))| (name, duration))
-            .collect();
-        app_vec.sort_by(|a, b| b.1.cmp(a.1));
+        let mut app_vec: Vec<(&String, &(TimeDelta, Vec<(String, TimeDelta)>))> = grouped_apps.iter().collect();
+        app_vec.sort_by(|a, b| b.1.0.cmp(&a.1.0));
 
-        let mut table = String::from(r#"<table class="app-table">
-            <tr>
-                <th>Application</th>
-                <th>Time Spent</th>
-            </tr>"#);
-
-        for (app_name, duration) in app_vec {
-            let hours = duration.num_hours();
-            let minutes = duration.num_minutes() % 60;
-            let time_str = if hours > 0 {
-                format!("{}h {}m", hours, minutes)
+        let mut rows = String::new();
+        for (app_name, (duration, _)) in app_vec {
+            let minutes = duration.num_minutes() as f64;
+            let percentage = if total_minutes > 0.0 {
+                (minutes / total_minutes) * 100.0
             } else {
-                format!("{}m", minutes)
+                0.0
             };
 
-            table.push_str(&format!(
-                r#"<tr>
-                    <td>{}</td>
-                    <td>{}</td>
-                </tr>"#,
-                app_name, time_str
+            rows.push_str(&format!(
+                "<tr><td>{}</td><td>{:.0}</td><td>{:.1}%</td></tr>",
+                app_name,
+                minutes,
+                percentage
             ));
         }
 
-        table.push_str("</table>");
-        table
+        rows
     }
     
     fn generate_activity_table(&self, activity_breakdown: &HashMap<String, TimeDelta>, total_minutes: f64) -> String {
@@ -321,8 +312,10 @@ impl ReportGenerator {
             "Moderate Focus".to_string()
         } else if score >= 40.0 {
             "Balanced".to_string()
-        } else {
+        } else if score > 0.0 {
             "Distracted".to_string()
+        } else {
+            "High Focus".to_string() // Default to High Focus when no activity
         }
     }
     
@@ -343,6 +336,10 @@ impl ReportGenerator {
         let total_minutes = productive_minutes + distracted_minutes + idle_minutes;
         
         let mut observations = String::new();
+        
+        if total_minutes == 0.0 {
+            return "No activity tracked during this session.".to_string();
+        }
         
         // Time distribution observations
         if productive_minutes > 0.0 {
@@ -374,18 +371,24 @@ impl ReportGenerator {
         // Application observations
         if let Some((app, duration)) = summary.application_breakdown.iter()
             .max_by(|a, b| a.1.cmp(b.1)) {
-            let app_minutes = duration.num_minutes() as f64;
-            observations.push_str(&format!(
-                "The application you used most was '{}' for {:.0} minutes. ",
-                app, app_minutes
-            ));
+            if duration.num_minutes() > 0 {
+                observations.push_str(&format!(
+                    "The application you used most was '{}' for {:.0} minutes. ",
+                    app, duration.num_minutes()
+                ));
+            }
         }
         
         // Time distribution rating
         let time_distribution_score = if total_minutes > 0.0 {
-            (productive_minutes / total_minutes) * 100.0
+            let active_time = productive_minutes + distracted_minutes;
+            if active_time > 0.0 {
+                (productive_minutes / active_time) * 100.0
+            } else {
+                100.0
+            }
         } else {
-            0.0
+            100.0
         };
         
         let rating = self.get_time_distribution_rating(time_distribution_score);
