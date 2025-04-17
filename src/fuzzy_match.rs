@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::Duration;
+use chrono::Duration as TimeDelta;
 
 /// Normalizes an app name by converting to lowercase and removing common suffixes
 pub fn normalize_app_name(app_name: &str) -> String {
@@ -24,16 +24,16 @@ pub fn normalize_app_name(app_name: &str) -> String {
 /// Groups similar application names together based on string similarity
 /// Returns a HashMap where keys are the canonical app names and values are tuples of
 /// (total duration, list of (app name, duration) pairs)
-pub fn group_similar_apps(app_times: &HashMap<String, Duration>) -> HashMap<String, (Duration, Vec<(String, Duration)>)> {
-    let mut grouped_apps: HashMap<String, (Duration, Vec<(String, Duration)>)> = HashMap::new();
+pub fn group_similar_apps(app_times: &HashMap<String, TimeDelta>) -> HashMap<String, (TimeDelta, Vec<(String, TimeDelta)>)> {
+    let mut grouped_apps: HashMap<String, (TimeDelta, Vec<(String, TimeDelta)>)> = HashMap::new();
     
     for (app_name, duration) in app_times {
         let canonical_name = find_canonical_name(app_name, &grouped_apps);
         
         let entry = grouped_apps.entry(canonical_name.clone())
-            .or_insert_with(|| (Duration::from_secs(0), Vec::new()));
+            .or_insert_with(|| (TimeDelta::zero(), Vec::new()));
         
-        entry.0 += *duration;
+        entry.0 = entry.0 + *duration;
         entry.1.push((app_name.clone(), *duration));
     }
     
@@ -41,7 +41,7 @@ pub fn group_similar_apps(app_times: &HashMap<String, Duration>) -> HashMap<Stri
 }
 
 /// Finds the canonical name for an app by checking similarity with existing names
-fn find_canonical_name(app_name: &str, grouped_apps: &HashMap<String, (Duration, Vec<(String, Duration)>)>) -> String {
+fn find_canonical_name(app_name: &str, grouped_apps: &HashMap<String, (TimeDelta, Vec<(String, TimeDelta)>)>) -> String {
     // If no existing groups, use the app name as is
     if grouped_apps.is_empty() {
         return app_name.to_string();

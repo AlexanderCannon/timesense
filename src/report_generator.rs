@@ -1,5 +1,5 @@
 use std::fs;
-use chrono::Duration;
+use chrono::Duration as TimeDelta;
 use std::collections::HashMap;
 use crate::fuzzy_match::group_similar_apps;
 
@@ -251,12 +251,14 @@ impl ReportGenerator {
         fs::write(filename, html).expect("Failed to write HTML report");
     }
 
-    pub fn generate_application_table(&self, app_breakdown: &HashMap<String, Duration>, total_minutes: f64) -> String {
+    pub fn generate_application_table(&self, app_breakdown: &HashMap<String, TimeDelta>, total_minutes: f64) -> String {
         // Group similar app names together
         let grouped_apps = group_similar_apps(app_breakdown);
         
         // Convert to vec for sorting
-        let mut app_vec: Vec<(&String, &Duration)> = grouped_apps.iter().collect();
+        let mut app_vec: Vec<(&String, &TimeDelta)> = grouped_apps.iter()
+            .map(|(name, (duration, _))| (name, duration))
+            .collect();
         app_vec.sort_by(|a, b| b.1.cmp(a.1));
 
         let mut table = String::from(r#"<table class="app-table">
@@ -287,9 +289,9 @@ impl ReportGenerator {
         table
     }
     
-    fn generate_activity_table(&self, activity_breakdown: &HashMap<String, Duration>, total_minutes: f64) -> String {
+    fn generate_activity_table(&self, activity_breakdown: &HashMap<String, TimeDelta>, total_minutes: f64) -> String {
         // Sort activities by duration (descending)
-        let mut sorted_activities: Vec<(&String, &Duration)> = activity_breakdown.iter().collect();
+        let mut sorted_activities: Vec<(&String, &TimeDelta)> = activity_breakdown.iter().collect();
         sorted_activities.sort_by(|a, b| b.1.cmp(a.1));
         
         sorted_activities
